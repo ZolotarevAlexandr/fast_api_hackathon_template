@@ -1,0 +1,61 @@
+$schema: https://json-schema.org/draft-07/schema
+$defs:
+  ApiSettings:
+    properties:
+      app_root_path:
+        default: /api
+        title: App Root Path
+        type: string
+      cors_allow_origin_regex:
+        default: .*
+        title: Cors Allow Origin Regex
+        type: string
+      db_url:
+        examples:
+        - postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+        - postgresql+asyncpg://postgres:postgres@db:5432/postgres
+        format: password
+        title: Db Url
+        type: string
+        writeOnly: true
+      secret_key:
+        example: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        format: password
+        title: Secret Key
+        type: string
+        writeOnly: true
+    required:
+    - db_url
+    - secret_key
+    title: ApiSettings
+    type: object
+  AuthSettings:
+    properties:
+      encryption_algorithm:
+        default: HS256
+        title: Encryption Algorithm
+        type: string
+      access_token_ttl_minutes:
+        default: 60
+        title: Access Token Ttl Minutes
+        type: integer
+      refresh_token_ttl_days:
+        default: 7
+        title: Refresh Token Ttl Days
+        type: integer
+      leeway:
+        default: 60
+        title: Leeway
+        type: integer
+    title: AuthSettings
+    type: object
+properties:
+  api_settings:
+    $ref: '#/$defs/ApiSettings'
+  auth_settings:
+    $ref: '#/$defs/AuthSettings'
+required:
+- api_settings
+- auth_settings
+title: Settings
+type: object

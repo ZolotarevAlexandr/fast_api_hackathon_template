@@ -1,0 +1,35 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        # Wait for the database to be ready before starting the application
+        condition: service_healthy
+    restart: always
+    ports:
+      - "8000:8001"
+    volumes:
+      - "./settings.yaml:/app/settings.yaml:ro" # Read-only settings file
+
+  db:
+    # See more: https://hub.docker.com/_/postgres
+    image: "postgres:17.1"
+    restart: always
+    # The commits were slow on our servers, so we turned off the synchronous_commit
+    command: postgres -c synchronous_commit=off
+    volumes:
+      - "postgres:/var/lib/postgresql/data"
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+
+volumes:
+  postgres:

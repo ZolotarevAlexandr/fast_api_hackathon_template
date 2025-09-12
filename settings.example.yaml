@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=settings.schema.yaml
+$schema: "./settings.schema.yaml"
+api_settings:
+  db_url: "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
+  secret_key: ...  # use `openssl rand -hex 32` to generate a random key
+  token_expiration_in_minutes: 60
+
+auth_settings:
+  access_token_ttl_minutes: 60
+  refresh_token_ttl_days: 7

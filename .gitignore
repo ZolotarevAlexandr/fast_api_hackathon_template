@@ -1,0 +1,19 @@
+### IDE ###
+.idea
+.vscode
+
+### Cache ###
+__pycache__
+.ruff_cache
+*.py[cod]
+
+### Environment ###
+.env
+.venv
+venv
+settings.yaml
+private.pem
+public.pem
+
+### OS ###
+.DS_Store
