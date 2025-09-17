@@ -5,7 +5,7 @@ from typing import Any
 
 import typer
 
-from fastapi_crud_generator.codemods import ensure_repository_dependency, ensure_router_registered
+from fastapi_crud_generator.codemods import ensure_model_export, ensure_repository_dependency, ensure_router_registered
 from fastapi_crud_generator.mappings import map_field_types, render_default_repr
 from fastapi_crud_generator.parser import FieldSpec, parse_field_tokens
 from fastapi_crud_generator.postgen import run_ruff_fix
@@ -139,6 +139,11 @@ def generate(
         if deps_file.exists():
             deps_modified = ensure_repository_dependency(deps_file, module_name=mod_name, model_name=model_name)
 
+    models_init = src_dir / "db" / "models" / "__init__.py"
+    models_init_modified = False
+    if models_init.exists():
+        models_init_modified = ensure_model_export(models_init, module_name=mod_name, model_name=model_name)
+
     # Post-gen lint/format
     run_ruff_fix(project_root=Path("."), strict=ruff_strict, use_uv=use_uv)
 
@@ -152,6 +157,9 @@ def generate(
         except Exception:
             path_str = str(r.path)
         typer.echo(f" - {r.action}: {path_str}")
+
+    if models_init.exists():
+        typer.echo(f" - {'modified' if models_init_modified else 'unchanged'}: {models_init}")
 
     if register:
         typer.echo(f" - {'modified' if app_modified else 'unchanged'}: {app_file}")

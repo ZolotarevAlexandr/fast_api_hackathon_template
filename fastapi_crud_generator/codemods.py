@@ -182,3 +182,133 @@ def ensure_repository_dependency(deps_py: Path, module_name: str, model_name: st
     if changed:
         deps_py.write_text(new_mod.code, encoding="utf-8")
     return changed
+
+
+@dataclass
+class ModelExportSpec:
+    module_name: str
+    model_name: str
+
+
+class _ModelExportTransformer(cst.CSTTransformer):
+    def __init__(self, spec: ModelExportSpec) -> None:
+        super().__init__()
+        self.spec = spec
+        self.seen_import = False
+        self.all_idx: int | None = None
+        self.current_all_names: list[str] = []
+
+    def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
+        mod = node.module
+        full = get_full_name_for_node(mod) if mod else None
+        if full == f"src.db.models.{self.spec.module_name}":
+            for alias in node.names:
+                if isinstance(alias, cst.ImportAlias) and getattr(alias.name, "value", "") == self.spec.model_name:
+                    self.seen_import = True
+
+    def visit_SimpleStatementLine(self, node: cst.SimpleStatementLine) -> None:
+        if len(node.body) != 1 or not isinstance(node.body[0], cst.Assign):
+            return
+        assign = node.body[0]
+        if len(assign.targets) != 1:
+            return
+        tgt = assign.targets[0].target
+        if isinstance(tgt, cst.Name) and tgt.value == "__all__":
+            # record index in leave_Module and capture current names
+            self.current_all_names = []
+            val = assign.value
+            if isinstance(val, (cst.List, cst.Tuple)):
+                for el in val.elements:
+                    if isinstance(el, cst.Element) and isinstance(el.value, cst.SimpleString):
+                        self.current_all_names.append(el.value.evaluated_value)
+
+    def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
+        body = list(updated_node.body)
+
+        # Ensure import: from src.db.models.<module> import <ModelName>
+        if not self.seen_import:
+            imp = cst.ImportFrom(
+                module=cst.parse_expression(f"src.db.models.{self.spec.module_name}"),
+                names=[cst.ImportAlias(name=cst.Name(self.spec.model_name))],
+            )
+            imp_stmt = cst.SimpleStatementLine(body=[imp])
+            insert_idx = 0
+            for i, stmt in enumerate(body):
+                if isinstance(stmt, cst.SimpleStatementLine) and any(
+                    isinstance(s, (cst.Import, cst.ImportFrom)) for s in stmt.body
+                ):
+                    insert_idx = i + 1
+            body.insert(insert_idx, imp_stmt)
+
+        # Locate existing __all__ statement index after potential import insertion
+        all_idx: int | None = None
+        for i, stmt in enumerate(body):
+            if isinstance(stmt, cst.SimpleStatementLine) and len(stmt.body) == 1 and isinstance(stmt.body[0], cst.Assign):
+                assign = stmt.body[0]
+                if len(assign.targets) == 1 and isinstance(assign.targets[0].target, cst.Name) and assign.targets[0].target.value == "__all__":
+                    all_idx = i
+                    break
+
+        # Build desired __all__ names with one-per-line
+        names: list[str] = self.current_all_names[:] if all_idx is not None else []
+        if "Base" not in names:
+            names.insert(0, "Base")
+        if self.spec.model_name not in names:
+            names.append(self.spec.model_name)
+
+        def build_all_stmt(lines: list[str]) -> cst.SimpleStatementLine:
+            # Force multi-line, one item per line, with trailing commas and closing bracket on its own line
+            inner = ",\n    ".join(repr(n) for n in lines) + ","
+            src = "__all__ = [\n    " + inner + "\n]\n"
+            return cst.parse_statement(src)
+
+        all_stmt = build_all_stmt(names)
+
+        if all_idx is None:
+            # Insert __all__ after the last import block
+            last_import_idx = -1
+            for i, stmt in enumerate(body):
+                if isinstance(stmt, cst.SimpleStatementLine) and any(
+                    isinstance(s, (cst.Import, cst.ImportFrom)) for s in stmt.body
+                ):
+                    last_import_idx = i
+            insert_at = last_import_idx + 1
+
+            # Normalize to exactly one blank line between imports and __all__
+            # Remove any existing EmptyLine directly after the last import
+            while insert_at < len(body) and isinstance(body[insert_at], cst.EmptyLine):
+                body.pop(insert_at)
+            # Insert exactly one blank line
+            body.insert(insert_at, cst.EmptyLine())
+            insert_at += 1
+            body.insert(insert_at, all_stmt)
+        else:
+            # Replace existing __all__ with formatted version
+            body[all_idx] = all_stmt
+            # Ensure exactly one blank line before __all__
+            # Remove any EmptyLine directly before __all__
+            j = all_idx - 1
+            removed = 0
+            while j >= 0 and isinstance(body[j], cst.EmptyLine):
+                body.pop(j)
+                all_idx -= 1
+                j -= 1
+                removed += 1
+            # Insert exactly one blank line
+            body.insert(all_idx, cst.EmptyLine())
+
+        return updated_node.with_changes(body=body)
+
+
+def ensure_model_export(models_init_py: Path, module_name: str, model_name: str) -> bool:
+    """
+    Ensure src/db/models/__init__.py imports the model and formats __all__ as a multi-line list
+    with a single blank line separating imports and __all__. Returns True if modified.
+    """
+    src = models_init_py.read_text(encoding="utf-8")
+    mod = cst.parse_module(src)
+    new_mod = mod.visit(_ModelExportTransformer(ModelExportSpec(module_name, model_name)))
+    if new_mod.code != src:
+        models_init_py.write_text(new_mod.code, encoding="utf-8")
+        return True
+    return False
