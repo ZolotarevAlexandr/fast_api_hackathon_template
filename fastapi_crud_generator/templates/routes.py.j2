@@ -5,6 +5,7 @@ from pydantic import EmailStr
 
 from src.api.auth.dependencies import require_admin
 from src.api.repositories.dependencies import get_{{ resource_singular }}_repository
+from src.db.models import User
 from src.db.repositories.{{ module_name }} import {{ ModelName }}Repository
 from src.schemas.{{ module_name }} import {{ ModelName }}Create, {{ ModelName }}Response
 
@@ -19,7 +20,7 @@ router = APIRouter(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_{{ resource_singular }}(
     payload: {{ ModelName }}Create,
-    _: object = Depends(require_admin),
+    _: User = Depends(require_admin),
     repo: {{ ModelName }}Repository = Depends(get_{{ resource_singular }}_repository),
 ) -> {{ ModelName }}Response:
 {%- for uf in unique_fields %}
@@ -37,7 +38,7 @@ async def create_{{ resource_singular }}(
 
 @router.get("")
 async def list_{{ resource_plural }}(
-    _: object = Depends(require_admin),
+    _: User = Depends(require_admin),
     repo: {{ ModelName }}Repository = Depends(get_{{ resource_singular }}_repository),
 ) -> list[{{ ModelName }}Response]:
     objs = await repo.list_{{ resource_plural }}()
@@ -47,7 +48,7 @@ async def list_{{ resource_plural }}(
 @router.get("/{{ '{' }}{{ id_param_name }}{{ '}' }}")
 async def get_{{ resource_singular }}(
     {{ id_param_name }}: int,
-    _: object = Depends(require_admin),
+    _: User = Depends(require_admin),
     repo: {{ ModelName }}Repository = Depends(get_{{ resource_singular }}_repository),
 ) -> {{ ModelName }}Response:
     obj = await repo.get_{{ resource_singular }}({{ id_param_name }})
@@ -62,7 +63,7 @@ async def edit_{{ resource_singular }}(
     {%- for f in fields %}
     {{ f.name }}: {{ f.route_param_annotation }} | None = None,
     {%- endfor %}
-    _: object = Depends(require_admin),
+    _: User = Depends(require_admin),
     repo: {{ ModelName }}Repository = Depends(get_{{ resource_singular }}_repository),
 ) -> {{ ModelName }}Response:
     update_kwargs: dict[str, object] = {}
@@ -87,7 +88,7 @@ async def edit_{{ resource_singular }}(
 @router.delete("/{{ '{' }}{{ id_param_name }}{{ '}' }}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_{{ resource_singular }}(
     {{ id_param_name }}: int,
-    _: object = Depends(require_admin),
+    _: User = Depends(require_admin),
     repo: {{ ModelName }}Repository = Depends(get_{{ resource_singular }}_repository),
 ):
     deleted = await repo.delete_{{ resource_singular }}({{ id_param_name }})
