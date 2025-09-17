@@ -145,6 +145,18 @@ class _DepsTransformer(cst.CSTTransformer):
                 f"    return {self.spec.import_name}(storage)\n"
             )
             func_stmt = cst.parse_statement(func_src)
+
+            trailing_blanks = 0
+            for node in reversed(new_body):
+                if isinstance(node, cst.EmptyLine):
+                    trailing_blanks += 1
+                else:
+                    break
+
+            needed = max(0, 2 - trailing_blanks)
+            for _ in range(needed):
+                new_body.append(cst.EmptyLine())
+
             new_body.append(func_stmt)
 
         return updated_node.with_changes(body=new_body)
