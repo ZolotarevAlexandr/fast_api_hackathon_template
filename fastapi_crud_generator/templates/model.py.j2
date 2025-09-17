@@ -1,0 +1,14 @@
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import String, Integer, Boolean, Float, Numeric, DateTime, JSON, Text
+from src.db.models.base import Base
+
+
+class {{ ModelName }}(Base):
+    __tablename__ = "{{ table_name }}"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+{%- for f in fields %}
+    {{ f.name }}: Mapped[{{ f.orm_type_annotation }}] = mapped_column(
+        {{ f.sa_type_expr }}{% if f.unique %}, unique=True{% endif %}{% if f.nullable %}, nullable=True{% endif %}{% if f.default is not none %}, default={{ f.default_repr }}{% endif %}{% if f.index %}, index=True{% endif %}
+    )
+{%- endfor %}

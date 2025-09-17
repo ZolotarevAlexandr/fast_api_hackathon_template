@@ -1,0 +1,18 @@
+{%- set needs_emailstr = fields | selectattr("pydantic_annotation", "equalto", "EmailStr") | list | length > 0 -%}
+from pydantic import ConfigDict{% if needs_emailstr %}, EmailStr{% endif %}
+from src.schemas.pydantic_base import BaseSchema
+
+
+class {{ ModelName }}Create(BaseSchema):
+{%- for f in fields %}
+    {{ f.name }}: {{ f.pydantic_annotation }}{% if f.nullable %} | None{% endif %}{% if f.default is not none %} = {{ f.default_repr }}{% endif %}
+{%- endfor %}
+
+
+class {{ ModelName }}Response(BaseSchema):
+    id: int
+{%- for f in fields %}
+    {{ f.name }}: {{ f.pydantic_annotation }}{% if f.nullable %} | None{% endif %}
+{%- endfor %}
+
+    model_config = ConfigDict(from_attributes=True)

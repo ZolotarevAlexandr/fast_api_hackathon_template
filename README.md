@@ -32,3 +32,8 @@
    (check [settings.schema.yaml](settings.schema.yaml) for more info).
 3. Install Docker with Docker Compose.
 4. Build and run docker container: `docker compose up --build`.
+
+
+## Code generation
+> [!TIP]
+> Project also includes simple CRUD code generator. See more in [corresponding readme](fastapi_crud_generator/README.md)

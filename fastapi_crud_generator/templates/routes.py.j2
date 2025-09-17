@@ -1,0 +1,96 @@
+from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi_derive_responses import AutoDeriveResponsesAPIRoute
+from starlette import status
+from pydantic import EmailStr
+
+from src.api.auth.dependencies import require_admin
+from src.api.repositories.dependencies import get_{{ resource_singular }}_repository
+from src.db.repositories.{{ module_name }} import {{ ModelName }}Repository
+from src.schemas.{{ module_name }} import {{ ModelName }}Create, {{ ModelName }}Response
+
+
+router = APIRouter(
+    prefix="/{{ resource_plural }}",
+    tags=["{{ tag_name }}"],
+    route_class=AutoDeriveResponsesAPIRoute,
+)
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+async def create_{{ resource_singular }}(
+    payload: {{ ModelName }}Create,
+    _: object = Depends(require_admin),
+    repo: {{ ModelName }}Repository = Depends(get_{{ resource_singular }}_repository),
+) -> {{ ModelName }}Response:
+{%- for uf in unique_fields %}
+    existing_{{ uf.name }} = await repo.get_{{ resource_singular }}_by_{{ uf.name }}(payload.{{ uf.name }})
+    if existing_{{ uf.name }}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="{{ uf.name|capitalize }} already in use")
+{%- endfor %}
+    obj = await repo.create_{{ resource_singular }}(
+{%- for f in fields %}
+        {{ f.name }}=payload.{{ f.name }}{% if not loop.last %}, {% endif %}
+{%- endfor %}
+    )
+    return {{ ModelName }}Response.model_validate(obj)
+
+
+@router.get("")
+async def list_{{ resource_plural }}(
+    _: object = Depends(require_admin),
+    repo: {{ ModelName }}Repository = Depends(get_{{ resource_singular }}_repository),
+) -> list[{{ ModelName }}Response]:
+    objs = await repo.list_{{ resource_plural }}()
+    return [{{ ModelName }}Response.model_validate(o) for o in objs]
+
+
+@router.get("/{{ '{' }}{{ id_param_name }}{{ '}' }}")
+async def get_{{ resource_singular }}(
+    {{ id_param_name }}: int,
+    _: object = Depends(require_admin),
+    repo: {{ ModelName }}Repository = Depends(get_{{ resource_singular }}_repository),
+) -> {{ ModelName }}Response:
+    obj = await repo.get_{{ resource_singular }}({{ id_param_name }})
+    if not obj:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="{{ ModelName }} {{ '{' }}{{ id_param_name }}{{ '}' }} not found")
+    return {{ ModelName }}Response.model_validate(obj)
+
+
+@router.patch("/{{ '{' }}{{ id_param_name }}{{ '}' }}")
+async def edit_{{ resource_singular }}(
+    {{ id_param_name }}: int,
+    {%- for f in fields %}
+    {{ f.name }}: {{ f.route_param_annotation }} | None = None,
+    {%- endfor %}
+    _: object = Depends(require_admin),
+    repo: {{ ModelName }}Repository = Depends(get_{{ resource_singular }}_repository),
+) -> {{ ModelName }}Response:
+    update_kwargs: dict[str, object] = {}
+{%- for f in fields %}
+    if {{ f.name }} is not None:
+        update_kwargs["{{ f.name }}"] = {{ f.name }}
+{%- endfor %}
+    if not update_kwargs:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No changes provided")
+{%- for uf in unique_fields %}
+    if "{{ uf.name }}" in update_kwargs:
+        existing = await repo.get_{{ resource_singular }}_by_{{ uf.name }}(update_kwargs["{{ uf.name }}"])
+        if existing and existing.id != {{ id_param_name }}:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="{{ uf.name|capitalize }} already in use")
+{%- endfor %}
+    edited = await repo.edit_{{ resource_singular }}({{ id_param_name }}, **update_kwargs)
+    if edited is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="{{ ModelName }} {{ '{' }}{{ id_param_name }}{{ '}' }} not found")
+    return {{ ModelName }}Response.model_validate(edited)
+
+
+@router.delete("/{{ '{' }}{{ id_param_name }}{{ '}' }}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_{{ resource_singular }}(
+    {{ id_param_name }}: int,
+    _: object = Depends(require_admin),
+    repo: {{ ModelName }}Repository = Depends(get_{{ resource_singular }}_repository),
+):
+    deleted = await repo.delete_{{ resource_singular }}({{ id_param_name }})
+    if deleted is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="{{ ModelName }} {{ '{' }}{{ id_param_name }}{{ '}' }} not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

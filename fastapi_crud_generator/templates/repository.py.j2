@@ -1,0 +1,86 @@
+from typing import Self
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.db.storage import AbstractSQLAlchemyStorage
+from src.db.models.{{ module_name }} import {{ ModelName }}
+
+
+class {{ ModelName }}Repository:
+    storage: AbstractSQLAlchemyStorage
+
+    def __init__(self, storage: AbstractSQLAlchemyStorage) -> None:
+        self.storage = storage
+
+    def update_storage(self, storage: AbstractSQLAlchemyStorage) -> Self:
+        self.storage = storage
+        return self
+
+    def _create_session(self) -> AsyncSession:
+        return self.storage.create_session()
+
+    async def create_{{ resource_singular }}(
+        self,
+        {%- for f in fields %}
+        {{ f.name }}: {{ f.repo_annotation }}{% if f.nullable and f.default is none %} | None = None{% elif f.default is not none %} = {{ f.default_repr }}{% endif %},
+        {%- endfor %}
+    ) -> {{ ModelName }}:
+        async with self._create_session() as session:
+            obj = {{ ModelName }}(
+                {%- for f in fields %}
+                {{ f.name }}={{ f.name }}{% if not loop.last %}, {% endif %}
+                {%- endfor %}
+            )
+            session.add(obj)
+            await session.commit()
+            return obj
+
+    async def get_{{ resource_singular }}(self, {{ id_param_name }}: int) -> {{ ModelName }} | None:
+        async with self._create_session() as session:
+            return await session.get({{ ModelName }}, {{ id_param_name }})
+
+    {%- for uf in unique_fields %}
+
+    async def get_{{ resource_singular }}_by_{{ uf.name }}(
+        self,
+        {{ uf.name }}: {{ uf.repo_annotation }},
+    ) -> {{ ModelName }} | None:
+        async with self._create_session() as session:
+            result = await session.execute(
+                select({{ ModelName }}).where({{ ModelName }}.{{ uf.name }} == {{ uf.name }})
+            )
+            return result.scalar_one_or_none()
+    {%- endfor %}
+
+    async def edit_{{ resource_singular }}(
+        self,
+        {{ id_param_name }}: int,
+        *,
+        {%- for f in fields %}
+        {{ f.name }}: {{ f.repo_annotation }} | None = None{% if not loop.last %},{% endif %}
+        {%- endfor %}
+    ) -> {{ ModelName }} | None:
+        async with self._create_session() as session:
+            obj = await session.get({{ ModelName }}, {{ id_param_name }})
+            if obj is None:
+                return None
+            {%- for f in fields %}
+            if {{ f.name }} is not None:
+                setattr(obj, "{{ f.name }}", {{ f.name }})
+            {%- endfor %}
+            await session.commit()
+            return obj
+
+    async def delete_{{ resource_singular }}(self, {{ id_param_name }}: int) -> {{ ModelName }} | None:
+        async with self._create_session() as session:
+            obj = await session.get({{ ModelName }}, {{ id_param_name }})
+            if obj is None:
+                return None
+            await session.delete(obj)
+            await session.commit()
+            return obj
+
+    async def list_{{ resource_plural }}(self) -> list[{{ ModelName }}]:
+        async with self._create_session() as session:
+            result = await session.execute(select({{ ModelName }}))
+            return list(result.scalars().all())

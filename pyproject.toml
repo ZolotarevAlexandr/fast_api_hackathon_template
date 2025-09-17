@@ -12,6 +12,8 @@ dependencies = [
     "fastapi-derive-responses>=0.1.4",
     "fastapi-swagger>=0.3.29",
     "gunicorn>=23.0.0",
+    "jinja2>=3.1.6",
+    "libcst>=1.8.4",
     "passlib>=1.7.4",
     "pydantic[email]>=2.11.7",
     "python-jose>=3.5.0",
@@ -19,6 +21,7 @@ dependencies = [
     "pyyaml>=6.0.2",
     "ruff>=0.12.11",
     "sqlalchemy>=2.0.43",
+    "typer>=0.17.4",
     "uvicorn>=0.35.0",
 ]
 
